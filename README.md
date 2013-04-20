@@ -30,4 +30,12 @@ The following page works currently only in firefox.
 The first one comes from : http://blog.gingertech.net/wp-content/uploads/2011/01/LCA_MM_AVProc2011/#slide1
 
 This is a spectrum 2D analyzer using the JS library DSP from Corban Brook for the fourier transformation.
+
+
 [2D Spectrum Analyzer](http://jbouzekri.pagesperso-orange.fr/js-spectrum-analyzer/spectrum2D.html)
+
+
+The same thing but in 3D thanks to this css3 cube code : http://cssdeck.com/labs/pure-css3-cube-transition
+
+
+[3D Spectrum Analyzer](http://jbouzekri.pagesperso-orange.fr/js-spectrum-analyzer/spectrum3D.html)
