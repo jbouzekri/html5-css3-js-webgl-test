@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta http-equiv="content-type" content="text/html; charset=utf-8">
+    <script language="javascript" src="js/dsp.js"></script>
+    <script language="javascript" src="js/jquery-2.0.0.min.js"></script>
+    <style type="text/css">
+      body { background: black; margin:0; padding:0;}
+      *{
+        /*transition*/
+        -webkit-transition:All 0.1s ease;
+           -moz-transition:All 0.1s ease;
+           -o-transition:All 0.1s ease;
+            transition:All 0.1s ease;
+      }
+      #container{
+        height: 100%;
+        margin-top: 22px;
+        text-align: center;
+        width: 100%;
+      }
+      .cube{width:35px;display:inline-block;}
+
+      .boxLeft{
+        background-color: #CCCCCC;
+        display: block;
+        height: 100px;
+        position: absolute;
+        transform: skew(0deg, 30deg);
+        width: 20px;
+        z-index: 4;
+      }
+      .boxTop{
+        background-color: #EEEEEE;
+        display: block;
+        height: 12px;
+        margin-left: 10px;
+        margin-top: -10px;
+        position: absolute;
+        transform: skew(60deg, -30deg);
+        width: 15px;
+        z-index: 4;
+      }
+      .boxFront{
+        background-color: #DDDDDD;
+        display: block;
+        height: 100px;
+        margin-left: 20px;
+        margin-top: 1px;
+        position: absolute;
+        transform: skew(0deg, -30deg);
+        width: 15px;
+        z-index: 4;
+      }
+
+    </style>
+  </head>
+  <body>
+    <audio preload="auto" controls="" src="HappyTreeFriends.wav" id="audio_spec" tabindex="0" style="width: 100%;height: 36px;"></audio><br />
+    <div id="container">
+        <div id="template" style="display:none;">
+          <div class="cube">
+            <div class="boxLeft">
+            </div>
+            <div class="boxTop">
+            </div>
+            <div class="boxFront">
+            </div>
+          </div>
+        </div>
+    </div>
+    <script type="text/javascript">
+      var cubeTemplate = $('#template').find('.cube');
+
+      var audio = document.getElementById("audio_spec");
+
+      audio.addEventListener("MozAudioAvailable", writeSamples, false);
+      audio.addEventListener("loadedmetadata", getMetadata, false);
+
+      var fbLength, channels, rate;
+      function getMetadata() {
+        channels = audio.mozChannels;
+        fbLength = audio.mozFrameBufferLength;
+        rate     = audio.mozSampleRate;
+        fft = new FFT(fbLength / channels, rate);
+      }
+
+      function writeSamples (event) {
+        var data = event.frameBuffer;
+        var length = data.length / channels;
+        var signal = new Float32Array(length);
+
+        for (var i = 0; i < length; i++ ) {
+          if (channels == 2) {
+            // merge channels into a stereo-mix mono signal
+            signal[i] = (data[2*i] + data[2*i+1]) / 2;
+          } else { // assume no more than 2 channels of data
+            signal[i] = data[i];
+          }
+        }
+
+        fft.forward(signal);
+
+        nbCube = 30;
+        cubeNumber = 0
+        freqPerCube = Math.floor(fft.spectrum.length / nbCube);
+        for (var i = 0; i < fft.spectrum.length; i++ ) {
+
+          if (i % freqPerCube == 0) {
+            cubeFrequence = 0;
+          }
+          // multiply spectrum by a zoom value
+          cubeFrequence += fft.spectrum[i] * 4000;
+
+          if (i % freqPerCube == 0) {
+            cube = $('.cube-'+cubeNumber);
+            if (cube.length == 0) {
+              cube = cubeTemplate.clone();
+              cube.addClass('cube-'+cubeNumber);
+              cube.css('left', cubeNumber*(-16)+'px');
+              cube.css('top', cubeNumber*(11)+'px');
+              cube.css('position', 'relative');
+              cube.appendTo('#container');
+            }
+
+            cube.find('.boxLeft').height(cubeFrequence);
+            cube.find('.boxFront').height(cubeFrequence);
+            cubeNumber++;
+          }
+        }
+      }
+    </script>
+  </body>
+</html>
