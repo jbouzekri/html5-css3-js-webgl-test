@@ -1,5 +1,5 @@
-html5-css3-js-webgl-test
-========================
+My tests with some web frontend technologies
+============================================
 
 Some tests with the following technology : HTML5, CSS3, Javascript and webGL
 
@@ -13,14 +13,14 @@ I am currently reading the following tutorial :
 http://learningwebgl.com/blog/?page_id=1217
 
 Result :
-[Tutorial 1](http://jbouzekri.pagesperso-orange.fr/webgl/webGL1.html)
-[Tutorial 2](http://jbouzekri.pagesperso-orange.fr/webgl/webGL2.html)
-[Tutorial 3](http://jbouzekri.pagesperso-orange.fr/webgl/webGL3.html)
-[Tutorial 4](http://jbouzekri.pagesperso-orange.fr/webgl/webGL4.html)
-[Tutorial 5](http://jbouzekri.pagesperso-orange.fr/webgl/webGL5.html)
+* [Tutorial 1](http://jbouzekri.pagesperso-orange.fr/webgl/webGL1.html)
+* [Tutorial 2](http://jbouzekri.pagesperso-orange.fr/webgl/webGL2.html)
+* [Tutorial 3](http://jbouzekri.pagesperso-orange.fr/webgl/webGL3.html)
+* [Tutorial 4](http://jbouzekri.pagesperso-orange.fr/webgl/webGL4.html)
+* [Tutorial 5](http://jbouzekri.pagesperso-orange.fr/webgl/webGL5.html)
 
 An a missed Star wars introduction (very bad ...) :
-[Star wars intro](http://jbouzekri.pagesperso-orange.fr/webgl/starwars-webgl.html)
+* [Star wars intro](http://jbouzekri.pagesperso-orange.fr/webgl/starwars-webgl.html)
 
 Audio HTML5 API
 ---------------
