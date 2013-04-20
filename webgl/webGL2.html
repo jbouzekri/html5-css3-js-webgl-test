@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <script language="javascript" src="js/glMatrix-0.9.5.min.js"></script>
+  </head>
+  <body onload="webGLStart();">
+    <p>
+        <canvas style="background-color:orange;" height="500" width="500" id="canvas_spec"></canvas>
+    </p>
+
+     <!-- Writtent in GLSL language
+         Define a precision float to increase performance
+         Every buffer will use a varying vector for the color
+    -->
+    <script id="shader-fs" type="x-shader/x-fragment">
+        precision mediump float;
+
+        varying vec4 vColor;
+
+        void main(void) {
+          gl_FragColor = vColor;
+        }
+    </script>
+
+    <!--
+        Vertex shader : used by graphic card to manipulate vertex
+        2 uniforms variables (can be defined accessed outside the shader)
+        Vertex given with the aVertexPosition variable
+        Multiplied by the view and projection matrix
+
+        aVertexColor : added to manage the color vector
+    -->
+    <script id="shader-vs" type="x-shader/x-vertex">
+        attribute vec3 aVertexPosition;
+        attribute vec4 aVertexColor;
+
+        uniform mat4 uMVMatrix;
+        uniform mat4 uPMatrix;
+
+        varying vec4 vColor;
+
+        void main(void) {
+          gl_Position = uPMatrix * uMVMatrix * vec4(aVertexPosition, 1.0);
+          vColor = aVertexColor;
+        }
+    </script>
+
+    <script type="text/javascript">
+
+      var canvas = document.getElementById("canvas_spec");
+
+      /* global variable to store the triangle */
+      var triangleVertexPositionBuffer;
+      /* global variable to store the triangle color vector */
+      var triangleVertexColorBuffer;
+
+      /* global variable to store the square */
+      var squareVertexPositionBuffer;
+      /* global variable to store the square color vector */
+      var squareVertexColorBuffer;
+
+      /* Defined the view and projection (for perspective data) matrix */
+      var mvMatrix = mat4.create();
+      var pMatrix = mat4.create();
+
+      /* Objet webgl : Program contains the shaders */
+      var shaderProgram;
+
+      /* Defined a webgl context with the canvas
+        experimental-webgl will change to webgl in the future */
+      var gl;
+      function initGL(canvas) {
+        try {
+          gl = canvas.getContext("experimental-webgl");
+          gl.viewportWidth = canvas.width;
+          gl.viewportHeight = canvas.height;
+        } catch(e) {
+        }
+        if (!gl) {
+          alert("Could not initialise WebGL, sorry :-(");
+        }
+      }
+
+      /* Used to load the shader by searching a HTML tag by id
+       * Create a shader based on the type attribute of the HTML tag. Referenced the shader in the webg context*/
+      function getShader(gl, id) {
+        var shaderScript = document.getElementById(id);
+        if (!shaderScript) {
+            return null;
+        }
+
+        var str = "";
+        var k = shaderScript.firstChild;
+        while (k) {
+            if (k.nodeType == 3)
+                str += k.textContent;
+            k = k.nextSibling;
+        }
+
+        var shader;
+        if (shaderScript.type == "x-shader/x-fragment") {
+            shader = gl.createShader(gl.FRAGMENT_SHADER);
+        } else if (shaderScript.type == "x-shader/x-vertex") {
+            shader = gl.createShader(gl.VERTEX_SHADER);
+        } else {
+            return null;
+        }
+
+        gl.shaderSource(shader, str);
+        gl.compileShader(shader);
+
+        if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+            alert(gl.getShaderInfoLog(shader));
+            return null;
+        }
+
+        return shader;
+      }
+
+      /* Give the projection and view matrix to the shader */
+      function setMatrixUniforms() {
+        gl.uniformMatrix4fv(shaderProgram.pMatrixUniform, false, pMatrix);
+        gl.uniformMatrix4fv(shaderProgram.mvMatrixUniform, false, mvMatrix);
+      }
+
+      /* Define the shader. Optimize code by doing some operation in the graphic card */
+      function initShaders() {
+        /* Get fragment shader */
+        var fragmentShader = getShader(gl, "shader-fs");
+        /* Get vertex shader */
+        var vertexShader = getShader(gl, "shader-vs");
+
+        /* Attach all shader to a webgl object called a program */
+        shaderProgram = gl.createProgram();
+        gl.attachShader(shaderProgram, vertexShader);
+        gl.attachShader(shaderProgram, fragmentShader);
+        gl.linkProgram(shaderProgram);
+        if (!gl.getProgramParameter(shaderProgram, gl.LINK_STATUS)) {
+          alert("Could not initialise shaders");
+        }
+        gl.useProgram(shaderProgram);
+
+        /* When the shaders are created and associated with the program.
+         * We obtain an attribute used in the drawScene function
+         */
+        shaderProgram.vertexPositionAttribute = gl.getAttribLocation(shaderProgram, "aVertexPosition")
+        /* Specify the attribute to webgl and defined its type : array */
+        gl.enableVertexAttribArray(shaderProgram.vertexPositionAttribute);
+
+        /* Add a reference to the aVertexColor variable of the shader */
+        shaderProgram.vertexColorAttribute = gl.getAttribLocation(shaderProgram, "aVertexColor");
+        gl.enableVertexAttribArray(shaderProgram.vertexColorAttribute);
+
+        /* Defined the uniforms variables to the program. Useful later. */
+        shaderProgram.pMatrixUniform = gl.getUniformLocation(shaderProgram, "uPMatrix");
+        shaderProgram.mvMatrixUniform = gl.getUniformLocation(shaderProgram, "uMVMatrix")
+      }
+
+      /* init webgl buffer */
+      function initBuffers() {
+        triangleVertexPositionBuffer = gl.createBuffer();
+
+        /* Say that all the following operation are on the triangle buffer. Like a selection operation */
+        gl.bindBuffer(gl.ARRAY_BUFFER, triangleVertexPositionBuffer);
+
+        /* isosceles triangle with point (0,0,0) in the center */
+        var vertices = [
+            0.0,  1.0,  0.0,
+           -1.0, -1.0,  0.0,
+            1.0, -1.0,  0.0
+       ];
+
+       /* Use our vector to fil the selected buffer */
+       gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(vertices), gl.STATIC_DRAW);
+
+       /* Not used by webGL but useful later */
+        triangleVertexPositionBuffer.itemSize = 3; // Defined the number of element used in a point of the vector (3 dimensions)
+        triangleVertexPositionBuffer.numItems = 3; // Defined the number of point to defined our triangle (3 : logical ^^).
+
+        /* Defined the color of the triangle */
+        triangleVertexColorBuffer = gl.createBuffer();
+        gl.bindBuffer(gl.ARRAY_BUFFER, triangleVertexColorBuffer);
+        /* Value are a liss. A set for each vertext position 4 elements : red, green, blue, alpha (opacity)
+         alpha : opactiy 0 transparent 1 opaque*/
+        var colors = [
+            1.0, 0.0, 0.0, 1.0,
+            0.0, 1.0, 0.0, 1.0,
+            0.0, 0.0, 1.0, 1.0
+        ];
+        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(colors), gl.STATIC_DRAW);
+        triangleVertexColorBuffer.itemSize = 4;
+        triangleVertexColorBuffer.numItems = 3;
+
+        /* Same thing for the square */
+        squareVertexPositionBuffer = gl.createBuffer();
+        gl.bindBuffer(gl.ARRAY_BUFFER, squareVertexPositionBuffer);
+        vertices = [
+             1.0,  1.0,  0.0,
+            -1.0,  1.0,  0.0,
+             1.0, -1.0,  0.0,
+            -1.0, -1.0,  0.0
+        ];
+        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(vertices), gl.STATIC_DRAW);
+        squareVertexPositionBuffer.itemSize = 3;
+        squareVertexPositionBuffer.numItems = 4;
+
+        /* For the square, we used the same color for each vector */
+        squareVertexColorBuffer = gl.createBuffer();
+        gl.bindBuffer(gl.ARRAY_BUFFER, squareVertexColorBuffer);
+        colors = []
+        for (var i=0; i < 4; i++) {
+          colors = colors.concat([0.5, 0.5, 1.0, 1.0]);
+        }
+        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(colors), gl.STATIC_DRAW);
+        squareVertexColorBuffer.itemSize = 4;
+        squareVertexColorBuffer.numItems = 4;
+      }
+
+      /* Draw in the canvas */
+      function drawScene() {
+          /* Give to webgl the viewport size. I don't know why but this is important */
+        gl.viewport(0, 0, gl.viewportWidth, gl.viewportHeight);
+
+        /* Clear the canvas */
+        gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+
+        /* Set the field of view at 45°, width/ height division and the perspective : hide everything nearer than 0.1 and out of sight (100) in units.
+         Perspective information are given by pMatrix : projection matrix */
+        mat4.perspective(45, gl.viewportWidth / gl.viewportHeight, 0.1, 100.0, pMatrix);
+
+        /* mvMatrix : Defined the center of our perspective by giving the view matrix */
+        mat4.identity(mvMatrix);
+
+        /* Translation of 1,5 on X and 7 on Z */
+        mat4.translate(mvMatrix, [-1.5, 0.0, -7.0]);
+
+        /* Draw the triangle */
+        /* Get and use the triangle buffer  */
+        gl.bindBuffer(gl.ARRAY_BUFFER, triangleVertexPositionBuffer);
+        gl.vertexAttribPointer(shaderProgram.vertexPositionAttribute, triangleVertexPositionBuffer.itemSize, gl.FLOAT, false, 0, 0);
+
+        /* Used the color vector for the triangle */
+        gl.bindBuffer(gl.ARRAY_BUFFER, triangleVertexColorBuffer);
+        gl.vertexAttribPointer(shaderProgram.vertexColorAttribute, triangleVertexColorBuffer.itemSize, gl.FLOAT, false, 0, 0);
+
+        /* Tell webgl to use all our matrix */
+        setMatrixUniforms();
+
+        /* Say to webgl to draw our vector in a triangle */
+        gl.drawArrays(gl.TRIANGLES, 0, triangleVertexPositionBuffer.numItems);
+
+        /* Draw the square */
+        /** Move to the right (3 units) because the last position was 1,5 to the left and 7 on the Z axis */
+        mat4.translate(mvMatrix, [3.0, 0.0, 0.0]);
+        gl.bindBuffer(gl.ARRAY_BUFFER, squareVertexPositionBuffer);
+        gl.vertexAttribPointer(shaderProgram.vertexPositionAttribute, squareVertexPositionBuffer.itemSize, gl.FLOAT, false, 0, 0);
+
+        /* Used the color vector for the square */
+        gl.bindBuffer(gl.ARRAY_BUFFER, squareVertexColorBuffer);
+        gl.vertexAttribPointer(shaderProgram.vertexColorAttribute, squareVertexColorBuffer.itemSize, gl.FLOAT, false, 0, 0);
+
+        setMatrixUniforms();
+        /* TRIANGLE_STRIP : draw the square by drawing cumulative triangle */
+        gl.drawArrays(gl.TRIANGLE_STRIP, 0, squareVertexPositionBuffer.numItems);
+      }
+
+      /* Call when page loaded */
+      function webGLStart() {
+        initGL(canvas);
+        initShaders();
+        initBuffers();
+
+        gl.clearColor(0.0, 0.0, 0.0, 1.0);
+        gl.enable(gl.DEPTH_TEST);
+
+        drawScene();
+      }
+    </script>
+  </body>
+</html>

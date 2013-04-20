@@ -1,0 +1,393 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Star Wars Title</title>
+    <meta http-equiv="content-type" content="text/html; charset=utf-8">
+
+    <style type="text/css">
+        body {width: 100%; height: 100%; background: url(img/space.jpg);}
+        #starwars {
+            padding-left: 0;
+            padding-right: 0;
+            margin-left: auto;
+            margin-right: auto;
+            display: block;
+            width:100%;}
+    </style>
+
+<script type="text/javascript" src="js/glMatrix-0.9.5.min.js"></script>
+<script type="text/javascript" src="js/webgl-utils.js"></script>
+
+<script id="shader-fs" type="x-shader/x-fragment">
+    precision mediump float;
+
+    varying vec2 vTextureCoord;
+
+    uniform sampler2D uSampler;
+
+    void main(void) {
+        gl_FragColor = texture2D(uSampler, vec2(vTextureCoord.s, vTextureCoord.t));
+    }
+</script>
+
+<script id="shader-vs" type="x-shader/x-vertex">
+    attribute vec3 aVertexPosition;
+    attribute vec2 aTextureCoord;
+
+    uniform mat4 uMVMatrix;
+    uniform mat4 uPMatrix;
+
+    varying vec2 vTextureCoord;
+
+
+    void main(void) {
+        gl_Position = uPMatrix * uMVMatrix * vec4(aVertexPosition, 1.0);
+        vTextureCoord = aTextureCoord;
+    }
+</script>
+
+
+<script type="text/javascript">
+
+    var gl;
+
+    function initGL(canvas) {
+        try {
+            gl = canvas.getContext("experimental-webgl");
+            gl.viewportWidth = canvas.width;
+            gl.viewportHeight = canvas.height;
+        } catch (e) {
+        }
+        if (!gl) {
+            alert("Could not initialise WebGL, sorry :-(");
+        }
+    }
+
+
+    function getShader(gl, id) {
+        var shaderScript = document.getElementById(id);
+        if (!shaderScript) {
+            return null;
+        }
+
+        var str = "";
+        var k = shaderScript.firstChild;
+        while (k) {
+            if (k.nodeType == 3) {
+                str += k.textContent;
+            }
+            k = k.nextSibling;
+        }
+
+        var shader;
+        if (shaderScript.type == "x-shader/x-fragment") {
+            shader = gl.createShader(gl.FRAGMENT_SHADER);
+        } else if (shaderScript.type == "x-shader/x-vertex") {
+            shader = gl.createShader(gl.VERTEX_SHADER);
+        } else {
+            return null;
+        }
+
+        gl.shaderSource(shader, str);
+        gl.compileShader(shader);
+
+        if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+            alert(gl.getShaderInfoLog(shader));
+            return null;
+        }
+
+        return shader;
+    }
+
+
+    var shaderProgram;
+
+    function initShaders() {
+        var fragmentShader = getShader(gl, "shader-fs");
+        var vertexShader = getShader(gl, "shader-vs");
+
+        shaderProgram = gl.createProgram();
+        gl.attachShader(shaderProgram, vertexShader);
+        gl.attachShader(shaderProgram, fragmentShader);
+        gl.linkProgram(shaderProgram);
+
+        if (!gl.getProgramParameter(shaderProgram, gl.LINK_STATUS)) {
+            alert("Could not initialise shaders");
+        }
+
+        gl.useProgram(shaderProgram);
+
+        shaderProgram.vertexPositionAttribute = gl.getAttribLocation(shaderProgram, "aVertexPosition");
+        gl.enableVertexAttribArray(shaderProgram.vertexPositionAttribute);
+
+        shaderProgram.textureCoordAttribute = gl.getAttribLocation(shaderProgram, "aTextureCoord");
+        gl.enableVertexAttribArray(shaderProgram.textureCoordAttribute);
+
+        shaderProgram.pMatrixUniform = gl.getUniformLocation(shaderProgram, "uPMatrix");
+        shaderProgram.mvMatrixUniform = gl.getUniformLocation(shaderProgram, "uMVMatrix");
+        shaderProgram.samplerUniform = gl.getUniformLocation(shaderProgram, "uSampler");
+    }
+
+
+    function handleLoadedTexture(texture, mimap) {
+        gl.bindTexture(gl.TEXTURE_2D, texture);
+        gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, texture.image);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+        if (mimap) {
+            gl.generateMipmap(gl.TEXTURE_2D);
+        }
+        gl.bindTexture(gl.TEXTURE_2D, null);
+    }
+
+
+    var neheTexture;
+    var textTexture;
+
+    function initTexture() {
+        neheTexture = gl.createTexture();
+        neheTexture.image = new Image();
+        neheTexture.image.onload = function () {
+            handleLoadedTexture(neheTexture, true)
+        }
+
+        neheTexture.image.src = "img/starwars-logo_transparent.png";
+
+        /*
+        textTexture.image = new Image();
+        textTexture.image.onload = function () {
+            handleLoadedTexture(textTexture)
+        }
+
+        textTexture.image.src = "img/nehe.gif";*/
+        textTexture = gl.createTexture();
+        textTexture.image = document.getElementById('text');
+        handleLoadedTexture(textTexture, false);
+    }
+
+
+    var mvMatrix = mat4.create();
+    var mvMatrixStack = [];
+    var pMatrix = mat4.create();
+
+    function mvPushMatrix() {
+        var copy = mat4.create();
+        mat4.set(mvMatrix, copy);
+        mvMatrixStack.push(copy);
+    }
+
+    function mvPopMatrix() {
+        if (mvMatrixStack.length == 0) {
+            throw "Invalid popMatrix!";
+        }
+        mvMatrix = mvMatrixStack.pop();
+    }
+
+
+    function setMatrixUniforms() {
+        gl.uniformMatrix4fv(shaderProgram.pMatrixUniform, false, pMatrix);
+        gl.uniformMatrix4fv(shaderProgram.mvMatrixUniform, false, mvMatrix);
+    }
+
+
+    function degToRad(degrees) {
+        return degrees * Math.PI / 180;
+    }
+
+    var squareTitleVertexPositionBuffer;
+    var squareTitleVertexTextureCoordBuffer;
+
+    var squareTextVertexPositionBuffer;
+    var squareTextVertexTextureCoordBuffer;
+
+    function initBuffers() {
+        squareTitleVertexPositionBuffer = gl.createBuffer();
+        gl.bindBuffer(gl.ARRAY_BUFFER, squareTitleVertexPositionBuffer);
+        vertices = [
+             1.0,  1.0,  0.0,
+            -1.0,  1.0,  0.0,
+             1.0, -1.0,  0.0,
+            -1.0, -1.0,  0.0
+        ];
+        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(vertices), gl.STATIC_DRAW);
+        squareTitleVertexPositionBuffer.itemSize = 3;
+        squareTitleVertexPositionBuffer.numItems = 4;
+
+        squareTitleVertexTextureCoordBuffer = gl.createBuffer();
+        gl.bindBuffer(gl.ARRAY_BUFFER, squareTitleVertexTextureCoordBuffer);
+        var textureCoords = [
+          1.0, 1.0,
+          0.0, 1.0,
+          1.0, 0.0,
+          0.0, 0.0,
+        ];
+        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(textureCoords), gl.STATIC_DRAW);
+        squareTitleVertexTextureCoordBuffer.itemSize = 2;
+        squareTitleVertexTextureCoordBuffer.numItems = 4;
+
+        squareTextVertexPositionBuffer = gl.createBuffer();
+        gl.bindBuffer(gl.ARRAY_BUFFER, squareTextVertexPositionBuffer);
+        vertices = [
+             8,   1.0,  -10,
+            -8,   1.0,  -10,
+             8,   -1.0,  10,
+            -8,   -1.0,  10
+        ];
+        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(vertices), gl.STATIC_DRAW);
+        squareTextVertexPositionBuffer.itemSize = 3;
+        squareTextVertexPositionBuffer.numItems = 4;
+
+        squareTextVertexTextureCoordBuffer = gl.createBuffer();
+        gl.bindBuffer(gl.ARRAY_BUFFER, squareTextVertexTextureCoordBuffer);
+        textureCoords = [
+          1.0, 1.0,
+          0.0, 1.0,
+          1.0, 0.0,
+          0.0, 0.0,
+        ];
+        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(textureCoords), gl.STATIC_DRAW);
+        squareTextVertexTextureCoordBuffer.itemSize = 2;
+        squareTextVertexTextureCoordBuffer.numItems = 4;
+    }
+
+
+    var xRot = 0;
+    var yRot = 0;
+    var zRot = 0;
+
+    function drawScene() {
+        gl.viewport(0, 0, gl.viewportWidth, gl.viewportHeight);
+        gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+
+        mat4.perspective(10, gl.viewportWidth / gl.viewportHeight, 0.01, 20.0, pMatrix);
+
+        mat4.identity(mvMatrix);
+
+        mat4.translate(mvMatrix, [0.0, 0.0, 5.0]);
+        mat4.translate(mvMatrix, [0.0, 0.0, -(zTrans)]);
+
+        gl.bindBuffer(gl.ARRAY_BUFFER, squareTitleVertexPositionBuffer);
+        gl.vertexAttribPointer(shaderProgram.vertexPositionAttribute, squareTitleVertexPositionBuffer.itemSize, gl.FLOAT, false, 0, 0);
+
+        gl.bindBuffer(gl.ARRAY_BUFFER, squareTitleVertexTextureCoordBuffer);
+        gl.vertexAttribPointer(shaderProgram.textureCoordAttribute, squareTitleVertexTextureCoordBuffer.itemSize, gl.FLOAT, false, 0, 0);
+
+        gl.activeTexture(gl.TEXTURE0);
+        gl.bindTexture(gl.TEXTURE_2D, neheTexture);
+        gl.uniform1i(shaderProgram.samplerUniform, 0);
+
+        setMatrixUniforms();
+        gl.drawArrays(gl.TRIANGLE_STRIP, 0, squareTitleVertexPositionBuffer.numItems);
+
+        mat4.perspective(45, gl.viewportWidth / gl.viewportHeight, 0.01, 15.0, pMatrix);
+
+        if (zTrans >= 20) {
+            mat4.translate(mvMatrix, [0.0, -2.0+yTrans, 17.0+zTrans2]);
+        } else {
+            mat4.translate(mvMatrix, [0.0, -2.0, 17.0+zTrans2]);
+        }
+
+        gl.bindBuffer(gl.ARRAY_BUFFER, squareTextVertexPositionBuffer);
+        gl.vertexAttribPointer(shaderProgram.vertexPositionAttribute, squareTextVertexPositionBuffer.itemSize, gl.FLOAT, false, 0, 0);
+        gl.bindBuffer(gl.ARRAY_BUFFER, squareTextVertexTextureCoordBuffer);
+        gl.vertexAttribPointer(shaderProgram.textureCoordAttribute, squareTextVertexTextureCoordBuffer.itemSize, gl.FLOAT, false, 0, 0);
+        gl.activeTexture(gl.TEXTURE0);
+        gl.bindTexture(gl.TEXTURE_2D, textTexture);
+        gl.uniform1i(shaderProgram.samplerUniform, 0);
+        setMatrixUniforms();
+        /* TRIANGLE_STRIP : draw the square by drawing cumulative triangle */
+        gl.drawArrays(gl.TRIANGLE_STRIP, 0, squareTextVertexPositionBuffer.numItems);
+    }
+
+
+    var lastTime = 0;
+    var zTrans = 0;
+    var zTrans2 = 0;
+    var yTrans = 0;
+
+    function animate() {
+        var timeNow = new Date().getTime();
+        if (lastTime != 0) {
+            var elapsed = timeNow - lastTime;
+
+            zTrans += 1/30;
+            zTrans2 = zTrans/2;
+            yTrans += 1/4000;
+        }
+        console.log(zTrans);
+        lastTime = timeNow;
+    }
+
+
+    function tick() {
+        requestAnimFrame(tick);
+        drawScene();
+        animate();
+    }
+
+    function buildTextCanvas() {
+    var canvasText = document.getElementById('text');
+    var ctx = canvasText.getContext('2d');
+    ctx.fillStyle = "#fbdf2b"; 	// This determines the text colour, it can take a hex value or rgba value (e.g. rgba(255,0,0,0.5))
+    ctx.textAlign = "center";	// This determines the alignment of text, e.g. left, center, right
+    ctx.textBaseline = "middle";	// This determines the baseline of the text, e.g. top, middle, bottom
+    ctx.font = "36px monospace";	// This determines the size of the text and the font family used
+    ctx.fillText('Episode IV:', canvasText.width/2, 30);
+    ctx.fillText('', canvasText.width/2, 10);
+    ctx.fillText('A New Hope', canvasText.width/2, 30+10+36);
+    ctx.fillText('', canvasText.width/2, 10);
+    ctx.font = "18px monospace";
+    ctx.fillText('It is a period of civil war.', canvasText.width/2, 30+10+36+10+18*1);
+    ctx.fillText('Rebel spaceships, striking', canvasText.width/2, 30+10+36+10+18*2);
+    ctx.fillText('from a hidden base, have won', canvasText.width/2, 30+10+36+10+18*3);
+    ctx.fillText('their first victory against', canvasText.width/2, 30+10+36+10+18*4);
+    ctx.fillText('the evil Galactic Empire.', canvasText.width/2, 30+10+36+10+18*5);
+    ctx.fillText('', canvasText.width/2, 30+10+36+10+18*5+10);
+    ctx.fillText('During the battle, Rebel', canvasText.width/2, 30+10+36+10+18*5+10+18);
+    ctx.fillText('spies managed to steal secret', canvasText.width/2, 30+10+36+10+18*5+10+18*2);
+    ctx.fillText('plans to the Empire\'s', canvasText.width/2, 30+10+36+10+18*5+10+18*3);
+    ctx.fillText('ultimate weapon, the Death', canvasText.width/2, 30+10+36+10+18*5+10+18*4);
+    ctx.fillText('Star, an armored space', canvasText.width/2, 30+10+36+10+18*5+10+18*5);
+    ctx.fillText('station with enough power to', canvasText.width/2, 30+10+36+10+18*5+10+18*6);
+    ctx.fillText('destroy an entire planet.', canvasText.width/2, 30+10+36+10+18*5+10+18*7);
+    ctx.fillText('', canvasText.width/2, 30+10+36+10+18*5+10+18*7+10);
+    ctx.fillText('Pursued by the Empire\'s', canvasText.width/2, 30+10+36+10+18*5+10+18*7+10+18);
+    ctx.fillText('sinister agents, Princess', canvasText.width/2, 30+10+36+10+18*5+10+18*7+10+18*2);
+    ctx.fillText('Leia races home aboard her', canvasText.width/2, 30+10+36+10+18*5+10+18*7+10+18*3);
+    ctx.fillText('starship, custodian of the', canvasText.width/2, 30+10+36+10+18*5+10+18*7+10+18*4);
+    ctx.fillText('stolen plans that can save', canvasText.width/2, 30+10+36+10+18*5+10+18*7+10+18*5);
+    ctx.fillText('her people and restore', canvasText.width/2, 30+10+36+10+18*5+10+18*7+10+18*6);
+    ctx.fillText('freedom to the galaxy...', canvasText.width/2, 30+10+36+10+18*5+10+18*7+10+18*7);
+    }
+    function webGLStart() {
+        buildTextCanvas();
+        var canvas = document.getElementById("starwars");
+        canvas.height = window.innerHeight-100;
+        canvas.width = window.innerWidth-100;
+        initGL(canvas);
+        initShaders();
+        initBuffers();
+        initTexture();
+
+        gl.enable(gl.DEPTH_TEST);
+        // Hide object too far away
+        gl.depthFunc(gl.LESS);
+
+        tick();
+    }
+
+
+</script>
+
+
+</head>
+
+
+<!--<body>-->
+<body onload="webGLStart();">
+    <canvas id="starwars" style="border: none;"></canvas>
+    <canvas id="text" style="border: none;display:none;" width="500" height="500"></canvas>
+</body>
+
+</html>

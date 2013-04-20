@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <script language="javascript" src="js/dsp.js"></script>
+    <meta http-equiv="content-type" content="text/html; charset=utf-8">
+    <style type="text/css">
+      body { background: black; margin:0; padding:0;}
+    </style>
+  </head>
+  <body>
+    <p>
+        <audio preload="auto" controls="" src="skyfall.wav" id="audio_spec" tabindex="0" style="width: 512px;"></audio><br />
+        <canvas style="background-color:orange;" height="200" width="512" id="canvas_spec"></canvas>
+    </p>
+
+    <script type="text/javascript">
+      var audio = document.getElementById("audio_spec");
+      var canvas = document.getElementById("canvas_spec");
+      var context = canvas.getContext('2d');
+      context.strokeStyle = "#FFFFFF";
+      context.lineWidth = 2;
+
+      audio.addEventListener("MozAudioAvailable", writeSamples, false);
+      audio.addEventListener("loadedmetadata", getMetadata, false);
+
+      var fbLength, channels, rate;
+      function getMetadata() {
+        channels = audio.mozChannels;
+        fbLength = audio.mozFrameBufferLength;
+        rate     = audio.mozSampleRate;
+        fft = new FFT(fbLength / channels, rate);
+      }
+
+      function writeSamples (event) {
+        var data = event.frameBuffer;
+        var length = data.length / channels;
+        var signal = new Float32Array(length);
+
+        for (var i = 0; i < length; i++ ) {
+          if (channels == 2) {
+            // merge channels into a stereo-mix mono signal
+            signal[i] = (data[2*i] + data[2*i+1]) / 2;
+          } else { // assume no more than 2 channels of data
+            signal[i] = data[i];
+          }
+        }
+
+        fft.forward(signal);
+
+        context.clearRect(0,0, 512, 200);
+        for (var i = 0; i < fft.spectrum.length; i++ ) {
+
+          // multiply spectrum by a zoom value
+          magnitude = fft.spectrum[i] * 4000;
+
+          // Draw rectangle bars for each frequency bin
+          context.fillRect(i * 4, canvas.height, 3, -magnitude);
+        }
+      }
+    </script>
+  </body>
+</html>
